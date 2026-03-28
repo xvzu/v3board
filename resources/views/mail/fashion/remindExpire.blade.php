@@ -17,7 +17,7 @@
                         </p>
 
                         <p style="margin: 20px 0 0; font-size: 15px; line-height: 1.7; color: #ff7272; font-weight: bold; text-align: center;">
-                            你的服务将在 **24小时内** 到期。
+                            你的服务将在 **{{ $expire_in_days ?? 1 }} 天内** 到期。
                         </p>
 
                         <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.7; color: #a9b3c2; text-align: center;">

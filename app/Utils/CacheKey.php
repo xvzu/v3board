@@ -33,6 +33,8 @@ class CacheKey
         'SERVER_V2NODE_LAST_PUSH_AT' => 'v2node节点最后推送时间',
         'TEMP_TOKEN' => '临时令牌',
         'LAST_SEND_EMAIL_REMIND_TRAFFIC' => '最后发送流量邮件提醒',
+        'LAST_SEND_EMAIL_REMIND_EXPIRE_EMAIL' => '最后发送到期提醒邮件',
+        'LAST_SEND_EMAIL_REMIND_EXPIRE_TELEGRAM' => '最后发送到期提醒Telegram',
         'SCHEDULE_LAST_CHECK_AT' => '计划任务最后检查时间',
         'REGISTER_IP_RATE_LIMIT' => '注册频率限制',
         'LAST_SEND_LOGIN_WITH_MAIL_LINK_TIMESTAMP' => '最后一次发送登入链接时间',

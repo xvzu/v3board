@@ -125,7 +125,7 @@
                                         <td class="content-block"
                                             style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 16px; color: #4a4a4a; vertical-align: top; margin: 0; padding: 0 0 20px;"
                                             valign="top">
-                                            您的订阅套餐将于 <strong>24</strong> 小时后到期，请及时续费
+                                            您的订阅套餐将于 <strong>{{ $expire_in_days ?? 1 }}</strong> 天内到期，请及时续费
                                         </td>
                                     </tr>
                                     <tr

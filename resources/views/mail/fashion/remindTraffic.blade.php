@@ -17,7 +17,7 @@
                         </p>
 
                         <p style="margin: 20px 0 0; font-size: 15px; line-height: 1.7; color: #ff7272; font-weight: bold; text-align: center;">
-                            你的流量已使用 **95%** 🚨
+                            你的流量已使用 **{{ $traffic_percent ?? 95 }}%** 🚨
                         </p>
 
                         <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.7; color: #a9b3c2; text-align: center;">

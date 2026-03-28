@@ -143,6 +143,10 @@ class ConfigController extends Controller
                 'email_encryption' => config('v2board.email_encryption'),
                 'email_from_address' => config('v2board.email_from_address')
             ],
+            'email_remind' => [
+                'remind_expire_days' => (int)config('v2board.remind_expire_days', 1),
+                'remind_traffic_percent' => (int)config('v2board.remind_traffic_percent', 95),
+            ],
             'telegram' => [
                 'telegram_bot_enable' => config('v2board.telegram_bot_enable', 0),
                 'telegram_bot_token' => config('v2board.telegram_bot_token'),

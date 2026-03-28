@@ -19,7 +19,7 @@
                                 尊敬的用户您好！
                                 <br />
                                 <br />
-                                你的流量已经使用95%。为了不造成使用上的影响请合理安排流量的使用。
+                                你的流量已使用 {{ $traffic_percent ?? 95 }}%。为了不造成使用上的影响请合理安排流量的使用。
                             </td>
                         </tr>
                         <tr style="padding:40px;display:table-cell">

@@ -76,6 +76,8 @@ class ConfigSave extends FormRequest
         'email_password' => '',
         'email_encryption' => '',
         'email_from_address' => '',
+        'remind_expire_days' => 'integer|min:1|max:365',
+        'remind_traffic_percent' => 'integer|min:1|max:100',
         // telegram
         'telegram_bot_enable' => 'in:0,1',
         'telegram_bot_token' => '',
