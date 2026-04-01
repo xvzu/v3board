@@ -191,6 +191,48 @@ class ConfigController extends Controller
         ]);
     }
 
+    public function fetchDomainRewriteRules()
+    {
+        return response([
+            'data' => config('v2board.subscribe_domain_rewrite_rules', [])
+        ]);
+    }
+
+    public function saveDomainRewriteRules(Request $request)
+    {
+        $rules = $request->input('rules', []);
+        if (!is_array($rules)) abort(422, '参数格式错误');
+        // 校验每条规则
+        foreach ($rules as $index => $rule) {
+            if (empty($rule['ua']) || empty($rule['domain']) || empty($rule['ip'])) {
+                abort(422, "第 " . ($index + 1) . " 条规则缺少必填字段（UA、域名、IP）");
+            }
+            if (!filter_var($rule['ip'], FILTER_VALIDATE_IP) && !preg_match('/^[\w.-]+$/', $rule['ip'])) {
+                abort(422, "第 " . ($index + 1) . " 条规则的 IP 格式不正确");
+            }
+        }
+        $config = config('v2board');
+        $config['subscribe_domain_rewrite_rules'] = array_values(array_map(function ($rule) {
+            return [
+                'ua' => trim($rule['ua']),
+                'domain' => trim($rule['domain']),
+                'ip' => trim($rule['ip']),
+                'remark' => trim($rule['remark'] ?? ''),
+            ];
+        }, $rules));
+        $data = var_export($config, 1);
+        if (!File::put(base_path() . '/config/v2board.php', "<?php\n return $data ;")) {
+            abort(500, '修改失败');
+        }
+        if (function_exists('opcache_reset')) {
+            opcache_reset();
+        }
+        Artisan::call('config:cache');
+        return response([
+            'data' => true
+        ]);
+    }
+
     public function save(ConfigSave $request)
     {
         $data = $request->validated();

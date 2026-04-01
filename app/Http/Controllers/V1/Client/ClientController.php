@@ -25,6 +25,7 @@ class ClientController extends Controller
         if ($userService->isAvailable($user)) {
             $serverService = new ServerService();
             $servers = $serverService->getAvailableServers($user);
+            $this->applyDomainRewriteRules($servers, $flag);
             if($flag) {
                 if (!strpos($flag, 'sing')) {
                     $this->setSubscribeInfoToServers($servers, $user);
@@ -52,6 +53,33 @@ class ClientController extends Controller
             $class = new General($user, $servers);
             return $class->handle();
         }
+    }
+
+    private function applyDomainRewriteRules(&$servers, $ua)
+    {
+        $rules = config('v2board.subscribe_domain_rewrite_rules', []);
+        if (empty($rules) || empty($ua)) return;
+
+        $matchedRules = [];
+        foreach ($rules as $rule) {
+            if (empty($rule['ua']) || empty($rule['domain']) || empty($rule['ip'])) continue;
+            if (stripos($ua, $rule['ua']) !== false) {
+                $matchedRules[] = $rule;
+            }
+        }
+        if (empty($matchedRules)) return;
+
+        $addressFields = ['host', 'server', 'address'];
+        foreach ($servers as &$server) {
+            foreach ($matchedRules as $rule) {
+                foreach ($addressFields as $field) {
+                    if (isset($server[$field]) && strtolower($server[$field]) === strtolower($rule['domain'])) {
+                        $server[$field] = $rule['ip'];
+                    }
+                }
+            }
+        }
+        unset($server);
     }
 
     private function setSubscribeInfoToServers(&$servers, $user)
