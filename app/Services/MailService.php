@@ -34,8 +34,13 @@ class MailService
         }
     }
 
+    public static function expireRemindTimes(): int
+    {
+        return max(1, (int)config('v2board.remind_expire_times', 1));
+    }
+
     /**
-     * 同一到期日各渠道最多提醒一次（避免提前 N 天 + 每日任务导致连发 N 封）；续费后 expired_at 变化会再次提醒。
+     * 缓存 TTL：到期后自动清除，续费后 expired_at 变化 key 也会不同
      */
     private function expireRemindCacheTtl(User $user): int
     {
@@ -46,40 +51,48 @@ class MailService
         return max(60, $user->expired_at - time());
     }
 
-    public function shouldSkipExpireEmail(User $user): bool
+    /**
+     * 获取本轮到期提醒的已发送次数（以 expired_at 为维度，续费后自动归零）
+     */
+    private function getExpireSentCount(User $user): int
     {
-        if ($user->expired_at === null) {
-            return true;
-        }
-        $cached = Cache::get(CacheKey::get('LAST_SEND_EMAIL_REMIND_EXPIRE_EMAIL', $user->id));
-
-        return $cached !== null && (int) $cached === (int) $user->expired_at;
+        $key = CacheKey::get('REMIND_EXPIRE_SENT_COUNT', $user->id . '_' . $user->expired_at);
+        return (int) Cache::get($key, 0);
     }
 
-    public function shouldSkipExpireTelegram(User $user): bool
+    public function incrementExpireSentCount(User $user): void
     {
-        if ($user->expired_at === null) {
-            return true;
-        }
-        $cached = Cache::get(CacheKey::get('LAST_SEND_EMAIL_REMIND_EXPIRE_TELEGRAM', $user->id));
-
-        return $cached !== null && (int) $cached === (int) $user->expired_at;
+        $key = CacheKey::get('REMIND_EXPIRE_SENT_COUNT', $user->id . '_' . $user->expired_at);
+        $sent = $this->getExpireSentCount($user) + 1;
+        Cache::put($key, $sent, $this->expireRemindCacheTtl($user));
     }
 
-    public function markExpireEmailSent(User $user): void
+    /**
+     * 判断当前时间是否应该发送第 N 次提醒
+     * 将 [expired_at - lead, expired_at] 区间等分为 times 份，每份一个发送时间点
+     * 当 now >= 第 N 个时间点 且 已发送次数 < N 时，应该发送
+     */
+    public function shouldSendExpireRemind(User $user): bool
     {
         if ($user->expired_at === null) {
-            return;
+            return false;
         }
-        Cache::put(CacheKey::get('LAST_SEND_EMAIL_REMIND_EXPIRE_EMAIL', $user->id), $user->expired_at, $this->expireRemindCacheTtl($user));
-    }
-
-    public function markExpireTelegramSent(User $user): void
-    {
-        if ($user->expired_at === null) {
-            return;
+        $lead = self::expireRemindLeadSeconds();
+        $start = $user->expired_at - $lead;
+        $now = time();
+        if ($now < $start || $now >= $user->expired_at) {
+            return false;
         }
-        Cache::put(CacheKey::get('LAST_SEND_EMAIL_REMIND_EXPIRE_TELEGRAM', $user->id), $user->expired_at, $this->expireRemindCacheTtl($user));
+        $times = self::expireRemindTimes();
+        $sent = $this->getExpireSentCount($user);
+        if ($sent >= $times) {
+            return false;
+        }
+        // 等间隔：interval = lead / times，第 N 次（0-indexed）的发送时间点 = start + N * interval
+        // 例：3天3次 → 第0天、第1天、第2天各发一次
+        $interval = $lead / $times;
+        $nextSendAt = $start + $sent * $interval;
+        return $now >= $nextSendAt;
     }
 
     public function remindTrafficIsWarnValue($u, $d, $transferEnable): bool
@@ -133,13 +146,15 @@ class MailService
 
     public function remindExpire(User $user)
     {
-        $lead = self::expireRemindLeadSeconds();
-        if (!($user->expired_at !== null && ($user->expired_at - $lead) < time() && $user->expired_at > time())) {
-            return;
-        }
-        $days = max(1, (int)config('v2board.remind_expire_days', 1));
+        // 循环发送所有已到期但未发送的提醒（应对 cron 频率低于提醒间隔的情况）
+        $maxLoops = self::expireRemindTimes();
+        $loops = 0;
+        while ($this->shouldSendExpireRemind($user) && $loops < $maxLoops) {
+            $loops++;
+            $days = max(1, (int)config('v2board.remind_expire_days', 1));
+            $expireDate = date('Y-m-d H:i', $user->expired_at);
+            $remainHours = max(1, (int)round(($user->expired_at - time()) / 3600));
 
-        if (!$this->shouldSkipExpireEmail($user)) {
             SendEmailJob::dispatch([
                 'email' => $user->email,
                 'subject' => __('The service in :app_name is about to expire', [
@@ -152,14 +167,13 @@ class MailService
                     'expire_in_days' => $days,
                 ],
             ]);
-            $this->markExpireEmailSent($user);
-        }
 
-        if ($user->telegram_id && !$this->shouldSkipExpireTelegram($user)) {
-            $expireDate = date('Y-m-d', $user->expired_at);
-            $message = "⏰ 您的服务即将到期（{$days} 天内），请及时续费。\n\n📅 到期时间：{$expireDate}";
-            $this->sendTelegramNotification($user, $message);
-            $this->markExpireTelegramSent($user);
+            if ($user->telegram_id) {
+                $message = "⏰ 您的服务即将到期（剩余约 {$remainHours} 小时），请及时续费。\n\n📅 到期时间：{$expireDate}";
+                $this->sendTelegramNotification($user, $message);
+            }
+
+            $this->incrementExpireSentCount($user);
         }
     }
 

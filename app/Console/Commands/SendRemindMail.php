@@ -48,18 +48,18 @@ class SendRemindMail extends Command
             // 如果用户开启了邮件通知
             if ($user->remind_expire) {
                 $mailService->remindExpire($user);
-            } 
+            }
             // 如果用户关闭了邮件通知但绑定了Telegram
             elseif ($user->telegram_id) {
-                $lead = MailService::expireRemindLeadSeconds();
-                if ($user->expired_at !== null && ($user->expired_at - $lead) < time() && $user->expired_at > time()) {
-                    if (!$mailService->shouldSkipExpireTelegram($user)) {
-                        $expireDate = date('Y-m-d', $user->expired_at);
-                        $days = max(1, (int)config('v2board.remind_expire_days', 1));
-                        $message = "⏰ 您的服务即将到期（{$days} 天内），请及时续费。\n\n📅 到期时间：{$expireDate}";
-                        $mailService->sendTelegramNotification($user, $message);
-                        $mailService->markExpireTelegramSent($user);
-                    }
+                $maxLoops = MailService::expireRemindTimes();
+                $loops = 0;
+                while ($mailService->shouldSendExpireRemind($user) && $loops < $maxLoops) {
+                    $loops++;
+                    $remainHours = max(1, (int)round(($user->expired_at - time()) / 3600));
+                    $expireDate = date('Y-m-d H:i', $user->expired_at);
+                    $message = "⏰ 您的服务即将到期（剩余约 {$remainHours} 小时），请及时续费。\n\n📅 到期时间：{$expireDate}";
+                    $mailService->sendTelegramNotification($user, $message);
+                    $mailService->incrementExpireSentCount($user);
                 }
             }
             
