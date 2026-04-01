@@ -470,7 +470,7 @@ class Helper
     {
         $tlsSettings = $server['tls_settings'] ?? [];
         $config = [
-            'type' => $server['network'],
+            'type' => $server['network'] ?? 'tcp',
             'insecure' => $server['insecure'] ?? ($tlsSettings['allow_insecure'] ?? 0),
             'fp' => $tlsSettings['fingerprint'] ?? 'chrome',
         ];
@@ -492,7 +492,7 @@ class Helper
 
     public static function configureNetworkSettings($server, &$config)
     {
-        $network = $server['network'];
+        $network = $server['network'] ?? null;
         $settings = $server['network_settings'] ?? ($server['networkSettings'] ?? []);
 
         switch ($network) {
