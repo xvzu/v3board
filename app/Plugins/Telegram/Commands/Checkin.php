@@ -21,6 +21,10 @@ class Checkin extends Telegram
 
     public function handle($message, $match = [])
     {
+        if (!(int)config('v2board.checkin_enable', 0)) {
+            return;
+        }
+
         // 确保是私聊消息
         if (!$message->is_private) {
             $this->telegramService->sendReply($message->chat_id, "❌ 请在私聊中使用签到功能");

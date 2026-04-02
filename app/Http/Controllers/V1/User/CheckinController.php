@@ -27,22 +27,29 @@ class CheckinController extends Controller
      */
     public function checkin(Request $request)
     {
+        if (!(int)config('v2board.checkin_enable', 0)) {
+            abort(500, '签到功能未开启');
+        }
+
         $user = User::find($request->user['id']);
         if (!$user) {
             abort(500, '用户不存在');
         }
-        
+
         // 获取签到类型参数，默认为普通签到
         $type = $request->input('type', 1);
-        
+
         switch ($type) {
             case 1:
                 // 普通签到
                 $result = $this->checkinService->standardCheckin($user);
                 break;
-                
+
             case 2:
                 // 运气签到
+                if (!(int)config('v2board.lucky_checkin_enable', 0)) {
+                    abort(500, '运气签到功能未开启');
+                }
                 // 验证输入参数
                 $params = $request->validate([
                     'input' => 'required|string'
