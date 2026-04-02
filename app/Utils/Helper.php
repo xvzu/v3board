@@ -485,7 +485,9 @@ class Helper
         $remote = self::formatHost($server['host']);
         $port = $server['port'];
         $name = self::encodeURIComponent($server['name']);
-        self::configureNetworkSettings($server, $config);
+        if (isset($server['network']) && isset($server['network_settings'])) {
+            self::configureNetworkSettings($server, $config);
+        }
         $query = http_build_query($config);
         return "anytls://{$password}@{$remote}:{$port}/?{$query}#{$name}\r\n";
     }
