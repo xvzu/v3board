@@ -27,7 +27,7 @@ class AuthController extends Controller
         if (!config('app.debug')) {
             return;
         }
-        
+
         $log_prefix = "[" . date('Y-m-d H:i:s') . "] [changeEmail] ";
         $log_message = $log_prefix . $message;
         if (!empty($data)) {
