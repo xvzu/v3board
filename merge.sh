@@ -22,7 +22,7 @@ git checkout $PRIVATE_BRANCH
 
 echo "🔀 尝试合并 $COMMON_REMOTE/$COMMON_BRANCH ..."
 set +e
-git merge --allow-unrelated-histories --no-ff $COMMON_REMOTE/$COMMON_BRANCH -m "merge: sync from EZ-Theme/$COMMON_BRANCH"
+git merge --allow-unrelated-histories --no-ff $COMMON_REMOTE/$COMMON_BRANCH -m "merge: sync from wyx2685/v2board/$COMMON_BRANCH"
 MERGE_EXIT_CODE=$?
 set -e
 
