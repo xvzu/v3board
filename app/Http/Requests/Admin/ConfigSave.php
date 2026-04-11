@@ -81,6 +81,8 @@ class ConfigSave extends FormRequest
         'remind_expire_days' => 'integer|min:1|max:365',
         'remind_expire_times' => 'integer|min:1|max:24',
         'remind_traffic_percent' => 'integer|min:1|max:100',
+        'remind_expire_default' => 'in:0,1',
+        'remind_traffic_default' => 'in:0,1',
         // telegram
         'telegram_bot_enable' => 'in:0,1',
         'telegram_bot_token' => '',

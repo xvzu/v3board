@@ -462,7 +462,11 @@ class OAuthController extends Controller
                     }
                 }
 
-                // --- 2.6 保存用户 ---
+                // --- 2.6 设置邮件提醒默认值 ---
+                $user->remind_expire = (int) config('v2board.remind_expire_default', 1);
+                $user->remind_traffic = (int) config('v2board.remind_traffic_default', 1);
+
+                // --- 2.7 保存用户 ---
                 safe_error_log("Attempting to save new user...", 'oauth_internal');
                 if (!$user->save()) {
                     $errorMsg = 'Failed to save new user.';
@@ -475,7 +479,7 @@ class OAuthController extends Controller
                 }
                 safe_error_log("New user saved successfully. User ID: {$user->id}", 'oauth_internal');
 
-                // --- 2.7 发送欢迎邮件 ---
+                // --- 2.8 发送欢迎邮件 ---
                 // 注意：对于 Telegram 用户，不发送欢迎邮件，因为邮箱是构造的
                 // 只有真实的邮箱地址才发送欢迎邮件
                 if (strpos($user->email, 'tg_') !== 0) {
@@ -500,7 +504,7 @@ class OAuthController extends Controller
                     safe_error_log("Skipping welcome email for Telegram user with constructed email.", 'oauth_internal');
                 }
 
-                // --- 2.8 注册后处理 ---
+                // --- 2.9 注册后处理 ---
                 $user->last_login_at = time();
                 $user->save();
                 safe_error_log("User last_login_at updated.", 'oauth_internal');

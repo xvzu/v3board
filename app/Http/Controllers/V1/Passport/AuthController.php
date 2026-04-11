@@ -276,6 +276,9 @@ class AuthController extends Controller
             }
         }
 
+        $user->remind_expire = (int) config('v2board.remind_expire_default', 1);
+        $user->remind_traffic = (int) config('v2board.remind_traffic_default', 1);
+
         if (!$user->save()) {
             abort(500, __('Register failed'));
         }

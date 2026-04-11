@@ -149,6 +149,8 @@ class ConfigController extends Controller
                 'remind_expire_days' => (int) config('v2board.remind_expire_days', 1),
                 'remind_traffic_percent' => (int) config('v2board.remind_traffic_percent', 95),
                 'remind_expire_times' => (int) config('v2board.remind_expire_times', 1),
+                'remind_expire_default' => (int) config('v2board.remind_expire_default', 1),
+                'remind_traffic_default' => (int) config('v2board.remind_traffic_default', 1),
             ],
             'telegram' => [
                 'telegram_bot_enable' => config('v2board.telegram_bot_enable', 0),
