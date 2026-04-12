@@ -22,7 +22,8 @@ use ReCaptcha\ReCaptcha;
 
 class AuthController extends Controller
 {
-    private function debugLog($message, $data = []) {
+    private function debugLog($message, $data = [])
+    {
         // 只有在 APP_DEBUG 为 true 时才生成日志
         if (!config('app.debug')) {
             return;
@@ -110,7 +111,7 @@ class AuthController extends Controller
         // 根据官方文档： _ * [ ] ( ) ~ ` > # + - = | { } . !
         // 我们这里保留 _ 和 * 不转义
         $special = ['[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
-        $repl    = array_map(function ($c) {
+        $repl = array_map(function ($c) {
             return '\\' . $c;
         }, $special);
         return str_replace($special, $repl, $text);
@@ -137,7 +138,7 @@ class AuthController extends Controller
     }
     public function loginWithMailLink(Request $request)
     {
-        if (!(int)config('v2board.login_with_mail_link_enable')) {
+        if (!(int) config('v2board.login_with_mail_link_enable')) {
             abort(404);
         }
         $params = $request->validate([
@@ -183,55 +184,57 @@ class AuthController extends Controller
         ]);
 
         return response([
-            'data' => $link
+            'data' => $true
         ]);
 
     }
 
     public function register(AuthRegister $request)
     {
-        if ((int)config('v2board.register_limit_by_ip_enable', 0)) {
+        if ((int) config('v2board.register_limit_by_ip_enable', 0)) {
             $registerCountByIP = Cache::get(CacheKey::get('REGISTER_IP_RATE_LIMIT', $request->ip())) ?? 0;
-            if ((int)$registerCountByIP >= (int)config('v2board.register_limit_count', 3)) {
+            if ((int) $registerCountByIP >= (int) config('v2board.register_limit_count', 3)) {
                 abort(500, __('Register frequently, please try again after :minute minute', [
                     'minute' => config('v2board.register_limit_expire', 60)
                 ]));
             }
         }
-        if ((int)config('v2board.recaptcha_enable', 0)) {
+        if ((int) config('v2board.recaptcha_enable', 0)) {
             $recaptcha = new ReCaptcha(config('v2board.recaptcha_key'));
             $recaptchaResp = $recaptcha->verify($request->input('recaptcha_data'));
             if (!$recaptchaResp->isSuccess()) {
                 abort(500, __('Invalid code is incorrect'));
             }
         }
-        if ((int)config('v2board.email_whitelist_enable', 0)) {
-            if (!Helper::emailSuffixVerify(
-                $request->input('email'),
-                config('v2board.email_whitelist_suffix', Dict::EMAIL_WHITELIST_SUFFIX_DEFAULT))
+        if ((int) config('v2board.email_whitelist_enable', 0)) {
+            if (
+                !Helper::emailSuffixVerify(
+                    $request->input('email'),
+                    config('v2board.email_whitelist_suffix', Dict::EMAIL_WHITELIST_SUFFIX_DEFAULT)
+                )
             ) {
                 abort(500, __('Email suffix is not in the Whitelist'));
             }
         }
-        if ((int)config('v2board.email_gmail_limit_enable', 0)) {
+        if ((int) config('v2board.email_gmail_limit_enable', 0)) {
             $prefix = explode('@', $request->input('email'))[0];
             if (strpos($prefix, '.') !== false || strpos($prefix, '+') !== false) {
                 abort(500, __('Gmail alias is not supported'));
             }
         }
-        if ((int)config('v2board.stop_register', 0)) {
+        if ((int) config('v2board.stop_register', 0)) {
             abort(500, __('Registration has closed'));
         }
-        if ((int)config('v2board.invite_force', 0)) {
+        if ((int) config('v2board.invite_force', 0)) {
             if (empty($request->input('invite_code'))) {
                 abort(500, __('You must use the invitation code to register'));
             }
         }
-        if ((int)config('v2board.email_verify', 0)) {
+        if ((int) config('v2board.email_verify', 0)) {
             if (empty($request->input('email_code'))) {
                 abort(500, __('Email verification code cannot be empty'));
             }
-            if ((string)Cache::get(CacheKey::get('EMAIL_VERIFY_CODE', $request->input('email'))) !== (string)$request->input('email_code')) {
+            if ((string) Cache::get(CacheKey::get('EMAIL_VERIFY_CODE', $request->input('email'))) !== (string) $request->input('email_code')) {
                 abort(500, __('Incorrect email verification code'));
             }
         }
@@ -251,12 +254,12 @@ class AuthController extends Controller
                 ->where('status', 0)
                 ->first();
             if (!$inviteCode) {
-                if ((int)config('v2board.invite_force', 0)) {
+                if ((int) config('v2board.invite_force', 0)) {
                     abort(500, __('Invalid invitation code'));
                 }
             } else {
                 $user->invite_user_id = $inviteCode->user_id ? $inviteCode->user_id : null;
-                if (!(int)config('v2board.invite_never_expire', 0)) {
+                if (!(int) config('v2board.invite_never_expire', 0)) {
                     $inviteCode->status = 1;
                     $inviteCode->save();
                 }
@@ -264,7 +267,7 @@ class AuthController extends Controller
         }
 
         // try out
-        if ((int)config('v2board.try_out_plan_id', 0)) {
+        if ((int) config('v2board.try_out_plan_id', 0)) {
             $plan = Plan::find(config('v2board.try_out_plan_id'));
             if ($plan) {
                 $user->transfer_enable = $plan->transfer_enable * 1073741824;
@@ -282,18 +285,18 @@ class AuthController extends Controller
         if (!$user->save()) {
             abort(500, __('Register failed'));
         }
-        if ((int)config('v2board.email_verify', 0)) {
+        if ((int) config('v2board.email_verify', 0)) {
             Cache::forget(CacheKey::get('EMAIL_VERIFY_CODE', $request->input('email')));
         }
 
         $user->last_login_at = time();
         $user->save();
 
-        if ((int)config('v2board.register_limit_by_ip_enable', 0)) {
+        if ((int) config('v2board.register_limit_by_ip_enable', 0)) {
             Cache::put(
                 CacheKey::get('REGISTER_IP_RATE_LIMIT', $request->ip()),
-                (int)$registerCountByIP + 1,
-                (int)config('v2board.register_limit_expire', 60) * 60
+                (int) $registerCountByIP + 1,
+                (int) config('v2board.register_limit_expire', 60) * 60
             );
         }
 
@@ -309,9 +312,9 @@ class AuthController extends Controller
         $email = $request->input('email');
         $password = $request->input('password');
 
-        if ((int)config('v2board.password_limit_enable', 1)) {
-            $passwordErrorCount = (int)Cache::get(CacheKey::get('PASSWORD_ERROR_LIMIT', $email), 0);
-            if ($passwordErrorCount >= (int)config('v2board.password_limit_count', 5)) {
+        if ((int) config('v2board.password_limit_enable', 1)) {
+            $passwordErrorCount = (int) Cache::get(CacheKey::get('PASSWORD_ERROR_LIMIT', $email), 0);
+            if ($passwordErrorCount >= (int) config('v2board.password_limit_count', 5)) {
                 abort(500, __('There are too many password errors, please try again after :minute minutes.', [
                     'minute' => config('v2board.password_limit_expire', 60)
                 ]));
@@ -322,17 +325,19 @@ class AuthController extends Controller
         if (!$user) {
             abort(500, __('Incorrect email or password'));
         }
-        if (!Helper::multiPasswordVerify(
-            $user->password_algo,
-            $user->password_salt,
-            $password,
-            $user->password)
+        if (
+            !Helper::multiPasswordVerify(
+                $user->password_algo,
+                $user->password_salt,
+                $password,
+                $user->password
+            )
         ) {
-            if ((int)config('v2board.password_limit_enable')) {
+            if ((int) config('v2board.password_limit_enable')) {
                 Cache::put(
                     CacheKey::get('PASSWORD_ERROR_LIMIT', $email),
-                    (int)$passwordErrorCount + 1,
-                    60 * (int)config('v2board.password_limit_expire', 60)
+                    (int) $passwordErrorCount + 1,
+                    60 * (int) config('v2board.password_limit_expire', 60)
                 );
             }
             abort(500, __('Incorrect email or password'));
@@ -361,7 +366,7 @@ class AuthController extends Controller
         }
 
         if ($request->input('verify')) {
-            $key =  CacheKey::get('TEMP_TOKEN', $request->input('verify'));
+            $key = CacheKey::get('TEMP_TOKEN', $request->input('verify'));
             $userId = Cache::get($key);
             if (!$userId) {
                 abort(500, __('Token error'));
@@ -384,10 +389,12 @@ class AuthController extends Controller
     public function getQuickLoginUrl(Request $request)
     {
         $authorization = $request->input('auth_data') ?? $request->header('authorization');
-        if (!$authorization) abort(403, '未登录或登陆已过期');
+        if (!$authorization)
+            abort(403, '未登录或登陆已过期');
 
         $user = AuthService::decryptAuthData($authorization);
-        if (!$user) abort(403, '未登录或登陆已过期');
+        if (!$user)
+            abort(403, '未登录或登陆已过期');
 
         $code = Helper::guid();
         $key = CacheKey::get('TEMP_TOKEN', $code);
@@ -406,9 +413,10 @@ class AuthController extends Controller
     public function forget(AuthForget $request)
     {
         $forgetRequestLimitKey = CacheKey::get('FORGET_REQUEST_LIMIT', $request->input('email'));
-        $forgetRequestLimit = (int)Cache::get($forgetRequestLimitKey);
-        if ($forgetRequestLimit >= 3) abort(500, __('Reset failed, Please try again later'));
-        if ((string)Cache::get(CacheKey::get('EMAIL_VERIFY_CODE', $request->input('email'))) !== (string)$request->input('email_code')) {
+        $forgetRequestLimit = (int) Cache::get($forgetRequestLimitKey);
+        if ($forgetRequestLimit >= 3)
+            abort(500, __('Reset failed, Please try again later'));
+        if ((string) Cache::get(CacheKey::get('EMAIL_VERIFY_CODE', $request->input('email'))) !== (string) $request->input('email_code')) {
             Cache::put($forgetRequestLimitKey, $forgetRequestLimit ? $forgetRequestLimit + 1 : 1, 300);
             abort(500, __('Incorrect email verification code'));
         }
@@ -505,7 +513,7 @@ class AuthController extends Controller
         }
 
         // 检查系统是否开启了邮箱验证
-        $emailVerifyEnabled = (bool)config('v2board.email_verify', 0);
+        $emailVerifyEnabled = (bool) config('v2board.email_verify', 0);
         $this->debugLog("Email verification status", [
             'enabled' => $emailVerifyEnabled,
         ]);
@@ -525,10 +533,10 @@ class AuthController extends Controller
                 'cache_key' => $cacheKey,
                 'cached_code' => $cachedCode,
                 'provided_code' => $emailCode,
-                'codes_match' => (string)$cachedCode === (string)$emailCode,
+                'codes_match' => (string) $cachedCode === (string) $emailCode,
             ]);
 
-            if ((string)$cachedCode !== (string)$emailCode) {
+            if ((string) $cachedCode !== (string) $emailCode) {
                 $this->debugLog("ERROR: Invalid or expired email code", [
                     'cached_code' => $cachedCode,
                     'provided_code' => $emailCode,
@@ -561,10 +569,10 @@ class AuthController extends Controller
 
         // 如果开启了邮箱验证并且验证码已使用，则清除验证码缓存
         if ($emailVerifyEnabled && $cachedCode) {
-             Cache::forget($cacheKey);
-             $this->debugLog("INFO: Email verification code cleared from cache", [
+            Cache::forget($cacheKey);
+            $this->debugLog("INFO: Email verification code cleared from cache", [
                 'cache_key' => $cacheKey,
-             ]);
+            ]);
         }
 
         // 如果用户绑定了Telegram，则发送通知
