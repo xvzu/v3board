@@ -184,7 +184,7 @@ class AuthController extends Controller
         ]);
 
         return response([
-            'data' => $true
+            'data' => true
         ]);
 
     }
