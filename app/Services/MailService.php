@@ -28,9 +28,17 @@ class MailService
 
     public function sendTelegramNotification(User $user, string $message)
     {
-        if ($user->telegram_id) {
-            $telegramService = new TelegramService();
-            $telegramService->sendMessage($user->telegram_id, $message);
+        if (!$user->telegram_id) {
+            return;
+        }
+        try {
+            (new TelegramService())->sendMessage($user->telegram_id, $message);
+        } catch (\Throwable $e) {
+            \Log::warning('send telegram remind failed', [
+                'user_id' => $user->id,
+                'telegram_id' => $user->telegram_id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
