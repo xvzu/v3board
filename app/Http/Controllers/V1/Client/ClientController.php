@@ -27,6 +27,7 @@ class ClientController extends Controller
             $serverService = new ServerService();
             $servers = $serverService->getAvailableServers($user);
             $this->applyDomainRewriteRules($servers, $flag);
+            $this->applyNodeWhitelistRules($servers, $flag);
             if($flag) {
                 $nextinEncrypted = new NextinEncrypted($user, $servers);
                 $shouldBlockNextinSubscription =
@@ -100,6 +101,44 @@ class ClientController extends Controller
             }
         }
         unset($server);
+    }
+
+    private function applyNodeWhitelistRules(&$servers, $ua)
+    {
+        $rules = config('v2board.subscribe_node_whitelist_rules', []);
+        if (empty($rules) || !is_array($rules)) return;
+
+        // Build map: "type:id" => [allowed UA keyword, ...]
+        $restricted = [];
+        foreach ($rules as $rule) {
+            if (!is_array($rule)) continue;
+            $ruleUa = isset($rule['ua']) ? trim((string)$rule['ua']) : '';
+            if ($ruleUa === '') continue;
+            if (empty($rule['nodes']) || !is_array($rule['nodes'])) continue;
+            foreach ($rule['nodes'] as $node) {
+                if (!is_array($node) || empty($node['type']) || !isset($node['id'])) continue;
+                $key = $node['type'] . ':' . (int)$node['id'];
+                $restricted[$key][] = $ruleUa;
+            }
+        }
+        if (empty($restricted)) return;
+
+        $servers = array_values(array_filter($servers, function ($server) use ($restricted, $ua) {
+            $key = ($server['type'] ?? '') . ':' . (isset($server['id']) ? (int)$server['id'] : '');
+            if (!isset($restricted[$key])) {
+                return true;
+            }
+            if (empty($ua)) {
+                return false;
+            }
+            foreach ($restricted[$key] as $allowedUa) {
+                if ($allowedUa === '') continue;
+                if (stripos($ua, $allowedUa) !== false) {
+                    return true;
+                }
+            }
+            return false;
+        }));
     }
 
     private function setSubscribeInfoToServers(&$servers, $user)

@@ -239,6 +239,77 @@ class ConfigController extends Controller
         ]);
     }
 
+    public function fetchSubscribeNodeWhitelistRules()
+    {
+        return response([
+            'data' => config('v2board.subscribe_node_whitelist_rules', [])
+        ]);
+    }
+
+    public function saveSubscribeNodeWhitelistRules(Request $request)
+    {
+        $allowedTypes = ['shadowsocks', 'vmess', 'vless', 'trojan', 'tuic', 'hysteria', 'anytls', 'v2node'];
+        $rules = $request->input('rules', []);
+        if (!is_array($rules))
+            abort(422, '参数格式错误');
+        foreach ($rules as $index => $rule) {
+            if (!is_array($rule)) {
+                abort(422, "第 " . ($index + 1) . " 条规则格式错误");
+            }
+            $ua = isset($rule['ua']) ? (string)$rule['ua'] : '';
+            if (trim($ua) === '') {
+                abort(422, "第 " . ($index + 1) . " 条规则的 UA 关键词不能为空");
+            }
+            if (empty($rule['nodes']) || !is_array($rule['nodes'])) {
+                abort(422, "第 " . ($index + 1) . " 条规则未选择任何节点");
+            }
+            foreach ($rule['nodes'] as $nodeIndex => $node) {
+                if (!is_array($node)) {
+                    abort(422, "第 " . ($index + 1) . " 条规则的第 " . ($nodeIndex + 1) . " 个节点格式错误");
+                }
+                if (empty($node['type']) || !isset($node['id'])) {
+                    abort(422, "第 " . ($index + 1) . " 条规则的第 " . ($nodeIndex + 1) . " 个节点缺少 type 或 id");
+                }
+                if (!in_array($node['type'], $allowedTypes, true)) {
+                    abort(422, "第 " . ($index + 1) . " 条规则包含不支持的节点类型：" . $node['type']);
+                }
+                if (!is_numeric($node['id'])) {
+                    abort(422, "第 " . ($index + 1) . " 条规则包含非法的节点 id");
+                }
+            }
+        }
+        $config = config('v2board');
+        $config['subscribe_node_whitelist_rules'] = array_values(array_map(function ($rule) {
+            $nodes = [];
+            $seen = [];
+            foreach ($rule['nodes'] as $node) {
+                $key = $node['type'] . ':' . (int)$node['id'];
+                if (isset($seen[$key])) continue;
+                $seen[$key] = true;
+                $nodes[] = [
+                    'type' => $node['type'],
+                    'id' => (int)$node['id'],
+                ];
+            }
+            return [
+                'ua' => trim($rule['ua']),
+                'nodes' => $nodes,
+                'remark' => trim($rule['remark'] ?? ''),
+            ];
+        }, $rules));
+        $data = var_export($config, 1);
+        if (!File::put(base_path() . '/config/v2board.php', "<?php\n return $data ;")) {
+            abort(500, '修改失败');
+        }
+        if (function_exists('opcache_reset')) {
+            opcache_reset();
+        }
+        Artisan::call('config:cache');
+        return response([
+            'data' => true
+        ]);
+    }
+
     public function save(ConfigSave $request)
     {
         $data = $request->validated();
