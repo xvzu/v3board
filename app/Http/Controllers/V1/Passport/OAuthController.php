@@ -80,9 +80,12 @@ class OAuthController extends Controller
             // *** 这个是关键：必须是在 Google Cloud Console 中注册的那个固定的后端回调地址 ***
             $googleCallbackUri = url('/api/v1/passport/oauth/google/callback');
 
-            // --- 将 redirect URL 编码并作为 state 参数传递 ---
-            $encodedRedirectUrl = base64url_encode($frontendRedirectUrl);
-            $state = $encodedRedirectUrl;
+            // --- 将 redirect URL 与邀请码一起编码作为 state 参数传递 ---
+            $statePayload = json_encode([
+                'r' => $frontendRedirectUrl,
+                'i' => (string)$code,
+            ]);
+            $state = base64url_encode($statePayload);
 
             // --- 构造 Google 授权 URL ---
             $authUrl = 'https://accounts.google.com/o/oauth2/auth?' . http_build_query([
@@ -103,9 +106,13 @@ class OAuthController extends Controller
             ]);
 
         } else if ($type === 'telegram') {
+            $telegramUrl = url('/api/v1/passport/oauth/telegram');
+            if (!empty($code)) {
+                $telegramUrl .= '?code=' . urlencode((string)$code);
+            }
             return response()->json([
                 'data' => [
-                    'url' => url('/api/v1/passport/oauth/telegram') // Telegram 直接跳转到后端处理地址
+                    'url' => $telegramUrl // Telegram 直接跳转到后端处理地址，邀请码透传
                 ]
             ]);
         } else {
@@ -122,6 +129,7 @@ class OAuthController extends Controller
     {
         // --- 1. 准备变量 ---
         $frontendCallbackUrl = ''; // 从 URL 参数或 state 中读取的前端 URL
+        $stateInviteCode = '';     // 从 state 中提取的邀请码（前端在发起 OAuth 时携带）
         $token = null;             // V2Board 返回的 token
         $errorMessage = null;      // 错误信息
 
@@ -131,13 +139,23 @@ class OAuthController extends Controller
             }
 
             // --- 2. 从 URL 查询参数或 Google state 参数获取 redirect URL ---
-            // Google 推荐使用 state 参数来防止 CSRF，我们可以借用它来传递 redirect URL
+            // Google 推荐使用 state 参数来防止 CSRF，我们可以借用它来传递 redirect URL + 邀请码
             $state = $request->input('state', '');
             if (!empty($state)) {
-                // 解码从 state 传来的 redirect URL
-                $frontendCallbackUrl = base64url_decode($state);
+                $stateRaw = base64url_decode($state);
+                // 优先尝试新格式（JSON：{r, i}），失败时兼容旧格式（state 即纯 URL）
+                $stateData = json_decode($stateRaw, true);
+                if (is_array($stateData) && isset($stateData['r'])) {
+                    $frontendCallbackUrl = (string)$stateData['r'];
+                    $stateInviteCode = isset($stateData['i']) ? (string)$stateData['i'] : '';
+                } else {
+                    $frontendCallbackUrl = $stateRaw;
+                }
                 if (config('app.debug')) {
-                    Log::info("Retrieved frontend callback URL from 'state' parameter", ['decoded_url' => $frontendCallbackUrl]);
+                    Log::info("Retrieved data from 'state' parameter", [
+                        'decoded_url' => $frontendCallbackUrl,
+                        'invite_code_present' => $stateInviteCode !== ''
+                    ]);
                 }
             }
 
@@ -260,8 +278,8 @@ class OAuthController extends Controller
                 throw new \Exception($errorMsg);
             }
 
-            // --- 7. 从配置或其他地方获取邀请码 ---
-            $inviteCode = $code ?? ''; // TODO: Implement proper invite code retrieval if needed
+            // --- 7. 邀请码从 state 中提取（在第 2 步已解码） ---
+            $inviteCode = $stateInviteCode;
 
             // --- 8. 调用内部登录/注册逻辑 ---
             if (config('app.debug')) {
@@ -378,6 +396,12 @@ class OAuthController extends Controller
         $cacheKey = CacheKey::get('TELEGRAM_LOGIN_HASH', $hash);
         Cache::put($cacheKey, $hash, 300); // 5分钟过期
 
+        // 2.1 如果前端带了邀请码，单独存一份和 hash 关联
+        $inviteCode = trim((string)$request->input('code', ''));
+        if ($inviteCode !== '') {
+            Cache::put(CacheKey::get('TELEGRAM_LOGIN_INVITE', $hash), $inviteCode, 300);
+        }
+
         // 3. 返回 hash 值给前端
         return response([
             'data' => [
@@ -408,6 +432,39 @@ class OAuthController extends Controller
 
             // --- 2. 如果用户不存在，则执行注册逻辑 ---
             if (!$user) {
+                // --- 2.0 检查站点是否已关闭新用户注册 ---
+                if ((int) config('v2board.stop_register', 0)) {
+                    safe_error_log("Registration is closed; refusing to create new account for email: {$email}", 'oauth_internal');
+                    return [
+                        'success' => false,
+                        'token' => null,
+                        'message' => '本站已关闭注册'
+                    ];
+                }
+
+                // --- 2.0.1 强制邀请检查（与 AuthController::register 保持一致）---
+                if ((int) config('v2board.invite_force', 0)) {
+                    if (empty($inviteCode)) {
+                        safe_error_log("Invite force enabled but no invite code provided for {$email}", 'oauth_internal');
+                        return [
+                            'success' => false,
+                            'token' => null,
+                            'message' => '必须使用邀请码才能注册'
+                        ];
+                    }
+                    $inviteCheck = InviteCode::where('code', $inviteCode)
+                        ->where('status', 0)
+                        ->first();
+                    if (!$inviteCheck) {
+                        safe_error_log("Invite force enabled and invite code is invalid: {$inviteCode} for {$email}", 'oauth_internal');
+                        return [
+                            'success' => false,
+                            'token' => null,
+                            'message' => '邀请码无效或已被使用'
+                        ];
+                    }
+                }
+
                 // --- 2.1 生成随机密码 ---
                 $password = Str::random(12);
                 safe_error_log("Generated password for new user: {$password} (for email: {$email})", 'oauth_internal'); // 仅供调试，生产环境不要记录密码
@@ -696,10 +753,18 @@ class OAuthController extends Controller
             ]);
         }
 
+        // 5.1 取出之前与 hash 关联的邀请码（前端在 /oauth/telegram 时存入）
+        $inviteCacheKey = CacheKey::get('TELEGRAM_LOGIN_INVITE', $hash);
+        $inviteCode = (string)Cache::get($inviteCacheKey, '');
+        if ($inviteCode !== '') {
+            Cache::forget($inviteCacheKey); // 立即清除避免重用
+            $this->debugLog("Step 5: Retrieved invite code from cache", ['has_invite' => true]);
+        }
+
         // 使用 try...catch 捕获 oauthLoginInternal 中可能抛出的异常
         $this->debugLog("Step 5: Calling oauthLoginInternal");
         try {
-            $result = $this->oauthLoginInternal($email, $name, '', $request);
+            $result = $this->oauthLoginInternal($email, $name, $inviteCode, $request);
             $this->debugLog("Step 5: oauthLoginInternal returned");
         } catch (\Exception $e) {
             $error_msg = "Step 5 EXCEPTION in oauthLoginInternal: " . $e->getMessage();
