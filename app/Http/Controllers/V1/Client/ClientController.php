@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V1\Client;
 
 use App\Http\Controllers\Controller;
 use App\Protocols\General;
+use App\Protocols\NextinEncrypted;
 use App\Protocols\Singbox\Singbox;
 use App\Protocols\Singbox\SingboxOld;
 use App\Protocols\ClashMeta;
@@ -16,8 +17,8 @@ class ClientController extends Controller
 {
     public function subscribe(Request $request)
     {
-        $flag = $request->input('flag')
-            ?? ($_SERVER['HTTP_USER_AGENT'] ?? '');
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $flag = $request->input('flag') ?? $userAgent;
         $flag = strtolower($flag);
         $user = $request->user;
         // account not expired and is not banned.
@@ -27,8 +28,27 @@ class ClientController extends Controller
             $servers = $serverService->getAvailableServers($user);
             $this->applyDomainRewriteRules($servers, $flag);
             if($flag) {
-                if (!strpos($flag, 'sing')) {
+                $nextinEncrypted = new NextinEncrypted($user, $servers);
+                $shouldBlockNextinSubscription =
+                    NextinEncrypted::shouldBlockSubscriptionForUserAgent($userAgent);
+                $shouldReturnEncryptedClashMeta =
+                    NextinEncrypted::shouldEncryptForUserAgent($userAgent)
+                    || strpos($flag, $nextinEncrypted->flag) !== false;
+
+                if ($shouldBlockNextinSubscription) {
+                    return response('', 403);
+                }
+
+                if ($shouldReturnEncryptedClashMeta || !strpos($flag, 'sing')) {
                     $this->setSubscribeInfoToServers($servers, $user);
+                    $nextinEncrypted = new NextinEncrypted($user, $servers);
+                }
+
+                if ($shouldReturnEncryptedClashMeta) {
+                    return $nextinEncrypted->handle();
+                }
+
+                if (!strpos($flag, 'sing')) {
                     foreach (array_reverse(glob(app_path('Protocols') . '/*.php')) as $file) {
                         $file = 'App\\Protocols\\' . basename($file, '.php');
                         $class = new $file($user, $servers);
